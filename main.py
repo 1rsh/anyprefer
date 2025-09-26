@@ -14,28 +14,28 @@ from prompts import (
 from utils.llm import LLMService
 from utils.logger import logger
 from utils.constants import OPENAI, GPT_4O_MINI
-from utils.response_models import JudgeResponse, RewardResponse, PromptOptimizationResponse
+from utils.response_models import JudgeResponse, RewardResponse, PromptOptimizationResponse, PreferenceData
 
 
 class AnyPrefer:
-    def __init__(self):
+    def __init__(self, llm_provider: str = OPENAI, model_id: str = GPT_4O_MINI, reward_threshold: int = 8):
         self.llm_services = {
-            "target": LLMService(OPENAI),
-            "judge": LLMService(OPENAI),
-            "reward": LLMService(OPENAI),
-            "prompt": LLMService(OPENAI),
+            "target": LLMService(llm_provider),
+            "judge": LLMService(llm_provider),
+            "reward": LLMService(llm_provider),
+            "prompt": LLMService(llm_provider),
         }
         
         self.models = {
-            "target": GPT_4O_MINI,
-            "judge": GPT_4O_MINI,
-            "reward": GPT_4O_MINI,
-            "prompt": GPT_4O_MINI,
+            "target": model_id,
+            "judge": model_id,
+            "reward": model_id,
+            "prompt": model_id,
         }
 
         self.target_system_prompt = TARGET_SYSTEM_PROMPT
         self.judge_system_prompt = JUDGE_SYSTEM_PROMPT
-        self.reward_threshold = 8
+        self.reward_threshold = reward_threshold
 
     async def generate_candidate_responses(self, prompt: str, num_responses: int = 5) -> List[str]:
         messages = [
@@ -95,7 +95,7 @@ class AnyPrefer:
         
         return
     
-    async def run_one(self, prompt: str, num_iterations: int = 3):
+    async def run_one(self, prompt: str, num_iterations: int = 3) -> PreferenceData:
         for i in range(num_iterations):
             logger.info(f"Iteration {i+1}/{num_iterations}")
 
@@ -127,7 +127,7 @@ class AnyPrefer:
             if reward_analysis.score >= self.reward_threshold:
                 self.target_system_prompt = TARGET_SYSTEM_PROMPT
                 self.judge_system_prompt = JUDGE_SYSTEM_PROMPT
-                return (prompt, positive_response, negative_response)
+                return PreferenceData(prompt, positive_response, negative_response)
             else:
                 logger.debug("Reward score below threshold, optimizing prompts...")
                 await self.optimize_prompts()
@@ -139,7 +139,45 @@ class AnyPrefer:
         
 
 if __name__ == "__main__":
-    anyprefer = AnyPrefer()
-    test_prompt = "What is the best way to deal with stress amongst students?"
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run AnyPrefer with a given prompt to generate a preference dataset sample.")
+    parser.add_argument(
+        "--prompt", "-p",
+        type=str,
+        default="Explain the theory of relativity in simple terms.",
+        help="Prompt to pass to the model."
+    )
+    parser.add_argument(
+        "--iterations", "-n",
+        type=int,
+        default=3,
+        help="Number of iterations to run (default: 3)."
+    )
+    parser.add_argument(
+        "--model", "-m",
+        type=str,
+        default=GPT_4O_MINI,
+        help="Model ID to use (default: GPT-4o-mini)."
+    )
+    parser.add_argument(
+        "--llm_provider", "-l",
+        type=str,
+        default=OPENAI,
+        help="LLM provider to use (default: OpenAI)."
+    )
+    parser.add_argument(
+        "--reward_threshold", "-r",
+        type=int,
+        default=8,
+        help="Reward threshold to accept a response (default: 8)."
+    )
+
+    args = parser.parse_args()
+
+
+    anyprefer = AnyPrefer(llm_provider=args.llm_provider, model_id=args.model, reward_threshold=args.reward_threshold)
     
-    asyncio.run(anyprefer.run_one(test_prompt, num_iterations=3))
+    data_point = asyncio.run(anyprefer.run_one(args.prompt, num_iterations=args.iterations))
+
+    print("Generated Preference Data Point:", data_point)

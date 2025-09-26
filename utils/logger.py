@@ -1,9 +1,6 @@
 import logging
 import sys
 import uuid
-import contextvars
-
-request_id_var = contextvars.ContextVar("request_id", default="N/A")
 
 def get_request_id():
     """Generate a unique request ID for logging."""
@@ -29,7 +26,7 @@ class ColorFormatter(logging.Formatter):
     RESET = "\033[0m"
     def format(self, record):
         level_color = self.COLORS.get(record.levelname, self.RESET)
-        log_fmt = f"[%(asctime)s] — ({level_color}%(levelname)s{self.RESET}) - {level_color}{request_id_var.get()}{self.RESET} — {level_color}%(message)s{self.RESET}"
+        log_fmt = f"[%(asctime)s] — ({level_color}%(levelname)s{self.RESET}) - {level_color}%(message)s{self.RESET}"
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 

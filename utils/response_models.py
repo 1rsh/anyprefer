@@ -11,3 +11,11 @@ class RewardResponse(BaseModel):
 class PromptOptimizationResponse(BaseModel):
     optimized_target_system_prompt: str = Field(..., description="The optimized target system prompt.")
     optimized_judge_system_prompt: str = Field(..., description="The optimized judge system prompt.")
+
+class PreferenceData(BaseModel):
+    prompt: str
+    positive_response: str
+    negative_response: str
+
+    def __repr__(self):
+        return f"PreferenceData(prompt={self.prompt}, positive_response={self.positive_response[:100]}..., negative_response={self.negative_response[:100]}...)"
