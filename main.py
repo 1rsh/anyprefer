@@ -127,7 +127,12 @@ class AnyPrefer:
             if reward_analysis.score >= self.reward_threshold:
                 self.target_system_prompt = TARGET_SYSTEM_PROMPT
                 self.judge_system_prompt = JUDGE_SYSTEM_PROMPT
-                return PreferenceData(prompt, positive_response, negative_response)
+                return PreferenceData(
+                    prompt=prompt, 
+                    positive_response=positive_response, 
+                    negative_response=negative_response,
+                    details=((candidate_responses[0][1], candidate_responses[-1][1]), reward_analysis, self.target_system_prompt, self.judge_system_prompt)
+                )
             else:
                 logger.debug("Reward score below threshold, optimizing prompts...")
                 await self.optimize_prompts()
@@ -174,7 +179,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
 
     anyprefer = AnyPrefer(llm_provider=args.llm_provider, model_id=args.model, reward_threshold=args.reward_threshold)
     

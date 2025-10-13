@@ -1,3 +1,4 @@
+from typing import Tuple
 from pydantic import BaseModel, Field
 
 class JudgeResponse(BaseModel):
@@ -16,6 +17,7 @@ class PreferenceData(BaseModel):
     prompt: str
     positive_response: str
     negative_response: str
+    details: Tuple[Tuple[JudgeResponse, JudgeResponse], RewardResponse, str, str]
 
-    def __repr__(self):
+    def __str__(self):
         return f"PreferenceData(prompt={self.prompt}, positive_response={self.positive_response[:100]}..., negative_response={self.negative_response[:100]}...)"
