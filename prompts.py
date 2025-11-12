@@ -1,77 +1,99 @@
 TARGET_SYSTEM_PROMPT = """\
-Given a user query, try to answer it.
+You are an expert science tutor answering challenging multiple-choice science questions. Each question has several options labeled A, B, C, D, etc.
+
+# Output Format
+Answer: <choice letter>
+Explanation: <reasoning behind your choice>
 """
 
+
 JUDGE_SYSTEM_PROMPT = """\
-Suppose that you are an expert in the given field, please rate the answers of some given questions.
+You are a science examiner evaluating answers to multiple-choice science questions.
 
 # Guideline
-Focus on correctness (whether the information provided in the answer is accurate according to the context) and helpfulness (whether the response answers the question).
+Focus on:
+1. **Correctness:** Does the answer match the scientifically correct choice for the question?
+2. **Reasoning Quality:** Does the explanation logically justify the chosen answer?
+3. **Clarity:** Is the explanation coherent and focused?
+
+The model answer should clearly state the selected choice label (A/B/C/D) and follow the exact format below.
+Answer: <letter>
+Explanation: <reasoning>
+
 
 # Requirement
-First provide analyses to all the answers, then assign each an integer between 1 and 10, where 1 means the answer is worst and 10 means the answer is perfect.
+Provide your reasoning first, then assign a score from 1 to 10 (1 = completely incorrect, 10 = perfectly correct and well reasoned).
 
-Answer in the following format:
+Output format:
 ```json
 {
-  "reasoning": "...",
-  "score": ...
+  "reasoning": "<your analysis>",
+  "score": <integer from 1 to 10>
 }
-```
+````
+
 """
 
 JUDGE_USER_PROMPT = """\
-Query: {prompt}
-Answer: {response}
-Please provide your analysis and score for the above answer.
+Question: {prompt}
+
+Model Answer:
+{response}
+
+Please evaluate the correctness and reasoning of the model's answer.
 """
 
 REWARD_SYSTEM_PROMPT = """\
-Suppose that you are an expert in the given field, please rate an RLHF data pair consisting of a query, positive response and negative response.
+You are a meta-evaluator assessing a preference data pair derived from the ARC-Challenge (ARC-C) dataset.
+Each pair consists of:
+1. A science question (multiple-choice)
+2. A positive (better) model answer
+3. A negative (worse) model answer
 
-# Guideline
-Reference criteria:
-1. The positive response should be coherent and correct as possible;
-2. The negative response should be worse than the positive one in certain way, but not wander off the topic or diverge in too many aspects. For example, if the positive response is “The capital of France is Paris”, a good negative response should be something like “The capital of France is London”, but not “France is a country in Europe” (diverge too much in topic) or “Capital France London is” (diverge both in knowledge and language).
+# Goal
+Evaluate how useful this data pair would be for training a science question–answering model
+through Direct Preference Optimization (DPO).
+
+# Guidelines
+1. **Correctness:** The positive answer should clearly identify the correct choice (A/B/C/D) and
+   provide factually accurate reasoning based on scientific principles.
+2. **Comparative Quality:** The negative answer should contain a clear factual, logical, or conceptual error
+   (e.g., incorrect choice or misleading reasoning), but still remain on-topic.
+3. **Pedagogical Value:** The difference between positive and negative answers should be meaningful for
+   teaching a model to prefer correct reasoning and avoid common misconceptions.
+4. **Clarity and Coherence:** Both answers should be written in clear, grammatically correct sentences.
+5. **On-Topicness:** Answers that wander off the question topic or use irrelevant facts reduce quality.
 
 # Requirement
-Please provide an integer score between 1 and 10 indicating the quality of the data pair if used in RLHF. The higher the score, the better the data pair. Please first analyze the positive response and the negative response, and then give the score.
+Provide a comparative analysis and assign an integer reward score between 1 and 10.
+Higher scores correspond to pairs that are clean, instructive, and scientifically precise.
 
-Answer in the following format:
+# Output Format
 ```json
 {
-  "analysis": "...",
-  "score": ...
+  "analysis": "<your comparison of the positive vs. negative answer, including correctness and reasoning quality>",
+  "score": <integer between 1 and 10>
 }
-```
 """
 
 REWARD_USER_PROMPT = """\
-Query: {prompt}
+Question: {prompt}
 
-Positive Response: 
+Positive Answer:
 {positive_response}
-Negative Response: 
+
+Negative Answer:
 {negative_response}
 
-Please provide your analysis and score for the above data pair, be extremely judicious.
+Analyze how well the positive answer outperforms the negative one in correctness and reasoning.
 """
 
 PROMPT_SYSTEM_PROMPT = """\
-You are an expert in prompt engineering. Your task is to optimize the given target system prompt and
-the judge system prompt to improve the quality of responses generated by a language model.
+You are an expert prompt engineer optimizing system prompts for ARC-Challenge multiple-choice science QA.
 
 # Guideline
-# Target System Prompt
-1. Ensure clarity: The prompt should be clear and unambiguous, guiding the model to understand the task.
-2. Provide context: Include relevant context or background information to help the model generate accurate responses.
-3. Specify format: If a specific response format is required, clearly state it in the prompt.
-4. Use examples: If applicable, provide examples of desired responses to guide the model
-
-# Judge System Prompt
-1. Define criteria: Clearly outline the criteria for judging responses, such as correctness, relevance, and completeness.
-2. Emphasize objectivity: Encourage objective evaluation based on the defined criteria, avoiding personal biases.
-3. Include examples: Provide examples of high-quality and low-quality responses to illustrate the judging criteria.
+- Ensure the Target System Prompt encourages explicit reasoning and answer labeling.
+- Ensure the Judge System Prompt critiques answers based on correctness, reasoning quality, format and clarity and penalizes correctly.
 
 Output format:
 ```json
@@ -79,15 +101,14 @@ Output format:
   "optimized_target_system_prompt": "...",
   "optimized_judge_system_prompt": "..."
 }
-```
+````
+
 """
 
-PROMPT_USER_PROMPT = """
-Given the following target system prompt and judge system prompt, optimize them for better performance.
-
-Target System Prompt:
-{target_system_prompt}
-
-Judge System Prompt:
+PROMPT_USER_PROMPT = """\
+Current Target System Prompt:
+{target_system_prompt}  
+Current Judge System Prompt:
 {judge_system_prompt}
+Please provide improved versions of both prompts to enhance both the target and judge model.
 """

@@ -11,11 +11,11 @@ from prompts import (
     PROMPT_USER_PROMPT,
 )
 
-from utils.llm import LLMService
+from utils.llm import LLMService, LocalLLMService
 from utils.logger import logger
-from utils.constants import OPENAI, GPT_4O_MINI
+from utils.constants import OPENAI, GPT_4O_MINI, OLLAMA, LLAMA_3_1
 from utils.response_models import JudgeResponse, RewardResponse, PromptOptimizationResponse, PreferenceData
-
+from utils.tools.web_search import WebSearchTool
 
 class AnyPrefer:
     def __init__(self, llm_provider: str = OPENAI, model_id: str = GPT_4O_MINI, reward_threshold: int = 8):
@@ -63,7 +63,7 @@ class AnyPrefer:
                 {"role": "system", "content": self.judge_system_prompt},
                 {"role": "user", "content": JUDGE_USER_PROMPT.format(prompt=prompt, response=response)}
             ]
-            judge_results.append(await llm_service.call_llm_structured(model=model, messages=messages, response_format=JudgeResponse))
+            judge_results.append(await llm_service.call_llm_structured(model=model, messages=messages, response_format=JudgeResponse, tools={"web_search": WebSearchTool}, tool_choice='auto'))
         
         return [result or JudgeResponse(reasoning="", score=1) for result in judge_results]
     
@@ -141,6 +141,7 @@ class AnyPrefer:
         self.target_system_prompt = TARGET_SYSTEM_PROMPT
         self.judge_system_prompt = JUDGE_SYSTEM_PROMPT
         logger.critical("Max iterations reached without satisfactory response, consider reducing the reward threshold.")
+        return None
         
 
 if __name__ == "__main__":
@@ -185,3 +186,25 @@ if __name__ == "__main__":
     data_point = asyncio.run(anyprefer.run_one(args.prompt, num_iterations=args.iterations))
 
     print("Generated Preference Data Point:", data_point)
+
+
+class CustomAnyPrefer(AnyPrefer):
+    def __init__(self, llm_provider: str = OLLAMA, model_id: str = LLAMA_3_1, reward_threshold: int = 8):
+        # super().__init__(llm_provider, model_id, reward_threshold)
+        self.llm_services = {
+            "target": LocalLLMService(),
+            "judge": LLMService(OPENAI),
+            "reward": LLMService(OPENAI),
+            "prompt": LLMService(OPENAI),
+        }
+        
+        self.models = {
+            "target": model_id,
+            "judge": GPT_4O_MINI,
+            "reward": GPT_4O_MINI,
+            "prompt": GPT_4O_MINI,
+        }
+
+        self.target_system_prompt = TARGET_SYSTEM_PROMPT
+        self.judge_system_prompt = JUDGE_SYSTEM_PROMPT
+        self.reward_threshold = reward_threshold

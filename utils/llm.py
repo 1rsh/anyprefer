@@ -3,9 +3,11 @@ from openai import AsyncOpenAI
 from abc import ABC, abstractmethod
 from typing import List, Literal, Union
 from pydantic import BaseModel
+import json
+import aiohttp
 
 from utils.logger import logger
-from utils.constants import PROVIDER_INFORMATION
+from utils.constants import PROVIDER_INFORMATION, OLLAMA
 from utils.tools.base import BaseTool
 
 class BaseLLMService(ABC):
@@ -47,7 +49,7 @@ class LLMService(BaseLLMService):
             logger.error(f"{self.name} LLM service failed to call model {generic_model_name}: {e}")
             return None
 
-    async def call_llm_structured(self, model: str, messages: List[dict], response_format: BaseModel):
+    async def call_llm_structured(self, model: str, messages: List[dict], response_format: BaseModel, tools: dict[str, BaseTool] = {}, tool_choice: Union[Literal['auto', 'none'], dict] = None):
         """Call the LLM with the given model and messages."""
         generic_model_name, model = self._get_model_id(model)
         try:
@@ -56,6 +58,8 @@ class LLMService(BaseLLMService):
                 model=model,
                 messages=messages,
                 response_model=response_format,
+                tools=[tool().openai_dict for tool in tools.values()],
+                tool_choice=tool_choice
             )
             return response
         except Exception as e:
@@ -81,4 +85,97 @@ class LLMService(BaseLLMService):
                 return None
         except Exception as e:
             logger.error(f"{self.name} LLM service failed to call model {generic_model_name}: {e}")
+            return None
+
+
+class LocalLLMService(BaseLLMService):
+    def __init__(self, base_url: str = "http://localhost:11434"):
+        self.base_url = base_url.rstrip("/")
+
+    async def _ollama_chat(self, model: str, messages: List[dict]):
+        """Low-level async wrapper for Ollama's /api/chat endpoint."""
+        url = f"{self.base_url}/api/chat"
+        payload = {"model": PROVIDER_INFORMATION[OLLAMA]["MODEL_ID"][model], "messages": messages, "stream": False}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as response:
+                if response.status != 200:
+                    text = await response.text()
+                    raise RuntimeError(f"Ollama returned {response.status}: {text}")
+                return await response.json()
+
+    async def call_llm(self, model: str, messages: List[dict]):
+        """Call local Ollama model."""
+        try:
+            response = await self._ollama_chat(model, messages)
+            content = response.get("message", {}).get("content")
+            return content
+        except Exception as e:
+            logger.error(f"Local LLM service failed to call model {model}: {e}")
+            return None
+
+    async def call_llm_structured(self, model: str, messages: List[dict], response_format: BaseModel):
+        """Simulate structured output by parsing into pydantic model."""
+        try:
+            system_instruction = {
+                "role": "system",
+                "content": (
+                    "Respond strictly in JSON format matching this schema:\n"
+                    f"{response_format.model_json_schema()}"
+                )
+            }
+            structured_messages = [system_instruction] + messages
+
+            response = await self._ollama_chat(model, structured_messages)
+            content = response.get("message", {}).get("content")
+
+            # Parse the response content into the provided Pydantic model
+            json_start = content.find('{')
+            json_str = content[json_start:]
+            parsed = json.loads(json_str)
+            return response_format.parse_obj(parsed)
+        except Exception as e:
+            logger.error(f"Local structured call failed for model {model}: {e}")
+            return None
+
+    async def call_llm_tools(
+        self,
+        model: str,
+        messages: List[dict],
+        tools: dict[str, "BaseTool"],
+        tool_choice: Union[Literal['auto', 'none'], dict] = 'auto'
+    ):
+        """
+        Very basic tool-call simulation for local models.
+        Since Ollama doesn’t natively support tool-calling,
+        we emulate it via JSON-instruction prompting.
+        """
+        try:
+            tool_descriptions = {
+                name: tool().description for name, tool in tools.items()
+            }
+
+            tool_prompt = (
+                "You have access to the following tools. "
+                "Decide which to call and provide a JSON response like "
+                '{"tool": "name", "arguments": { ... }}.\n\n'
+                f"{json.dumps(tool_descriptions, indent=2)}"
+            )
+            messages = [{"role": "system", "content": tool_prompt}] + messages
+
+            response = await self._ollama_chat(model, messages)
+            content = response.get("message", {}).get("content", "")
+
+            json_start = content.find('{')
+            parsed = json.loads(content[json_start:])
+
+            tool_name = parsed["tool"]
+            arguments = parsed.get("arguments", {})
+            if tool_name in tools:
+                chosen_tool = tools[tool_name]()
+                result = await chosen_tool.run(**arguments)
+                return result
+            return None
+        except Exception as e:
+            logger.error(f"Local tool call failed for model {model}: {e}")
             return None
