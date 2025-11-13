@@ -189,10 +189,10 @@ if __name__ == "__main__":
 
 
 class CustomAnyPrefer(AnyPrefer):
-    def __init__(self, llm_provider: str = OLLAMA, model_id: str = LLAMA_3_1, reward_threshold: int = 8):
+    def __init__(self, llm_provider: str = OLLAMA, model_id: str = LLAMA_3_1, reward_threshold: int = 8, base_url: str = "http://localhost:11434"):
         # super().__init__(llm_provider, model_id, reward_threshold)
         self.llm_services = {
-            "target": LocalLLMService(),
+            "target": LocalLLMService(base_url=base_url),
             "judge": LLMService(OPENAI),
             "reward": LLMService(OPENAI),
             "prompt": LLMService(OPENAI),

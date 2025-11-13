@@ -22,7 +22,7 @@ Explanation: <reasoning>
 
 
 # Requirement
-Provide your reasoning first, then assign a score from 1 to 10 (1 = completely incorrect, 10 = perfectly correct and well reasoned).
+Provide your reasoning first, then assign a score from 1 to 10 (1 = completely incorrect wrong answer, 10 = perfectly correct and well reasoned, concise with correct format).
 
 Output format:
 ```json
